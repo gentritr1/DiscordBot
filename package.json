@@ -1,0 +1,23 @@
+{
+  "name": "discord-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gentritr1/DiscordBot.git"
+  },
+  "author": "gentlegen",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/gentritr1/DiscordBot/issues"
+  },
+  "homepage": "https://github.com/gentritr1/DiscordBot#readme",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "mongoose": "^8.0.1"
+  }
+}
