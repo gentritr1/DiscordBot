@@ -1,48 +1,52 @@
-const token =
-  "MTE3ODY2MDMxNTA4MTIyODM4OA.GVE4ux.m_jwS6T-JHI4onzeO4uNLJqnc70iHJQ13h7tks"; // Replace with your bot's token
+const Discord = require("discord.js");
+const fs = require("fs");
+const connectMongoDB = require("./utils/mongoConnection");
+const getRandomMessage = require("./utils/getRandomMessage");
 
-const { Client, GatewayIntentBits } = require("discord.js");
+require("dotenv").config();
 
-const mongoose = require("mongoose");
-
-mongoose
-  .connect(
-    "mongodb+srv://gentlegen:4faQMRYofwTTMy6m@cluster0.q29osmz.mongodb.net/discordBot?retryWrites=true&w=majority",
-    {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    }
-  )
-  .then(() => console.log("Connected to MongoDB"))
-  .catch((err) => console.error("Could not connect to MongoDB", err));
-
-const client = new Client({
+const client = new Discord.Client({
   intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
+    Discord.GatewayIntentBits.Guilds,
+    Discord.GatewayIntentBits.GuildMessages,
+    Discord.GatewayIntentBits.MessageContent,
   ],
 });
+client.commands = new Map();
+
+const commandFiles = fs
+  .readdirSync("./src/commands")
+  .filter((file) => file.endsWith(".js"));
+
+for (const file of commandFiles) {
+  const command = require(`./commands/${file}`);
+  client.commands.set(command.name, command);
+}
 
 client.once("ready", () => {
-  console.log("Logged in as " + client.user.tag);
+  console.log("Ready!");
 });
 
 client.on("messageCreate", (message) => {
-  console.log("message", message.content);
+  if (!message.content.startsWith("!") || message.author.bot) return;
 
-  if (!message.author.bot) {
-    console.log(`Message from ${message.author.tag}: ${message.content}`);
-    // Additional command handling logic here
+  const args = message.content.slice(1).trim().split(/ +/);
+  const commandName = args.shift().toLowerCase();
+
+  const command = client.commands.get(commandName);
+
+  if (!client.commands.has(commandName)) {
+    const mafiaMessage = getRandomMessage("mafia");
+    message.reply(mafiaMessage);
+    return;
   }
 
-  // Ignore messages from the bot itself or non-commands
-  if (message.author.bot || !message.content.startsWith("!")) return;
-
-  const command = message.content.slice(1).trim(); // Remove the '!' prefix
-  if (command === "ping") {
-    message.channel.send("Pong!");
+  try {
+    command.execute(message, args, connectMongoDB);
+  } catch (error) {
+    console.error(error);
+    message.reply("There was an error executing that command.");
   }
 });
 
-client.login(token);
+client.login(process.env.DISCORD_TOKEN);
