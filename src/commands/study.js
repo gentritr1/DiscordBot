@@ -1,52 +1,22 @@
-const StudySession = require("../models/StudySession");
-const moment = require("moment");
-require("moment-duration-format"); // For extended formatting options
-const getRandomMessage = require("../utils/getRandomMessage");
+const StudyService = require("../services/studyService");
+const {
+  contextualResponse,
+  sendRandomizedResponse,
+} = require("../utils/responseUtils");
+const studyService = new StudyService();
 
-const execute = async (message, args, connectMongoDB) => {
-  await connectMongoDB();
+const execute = async (message, args) => {
+  let response = contextualResponse(message);
 
   if (args[0] === "start") {
-    const existingSession = await StudySession.findOne({
-      userId: message.author.id,
-      studyEnd: null,
-    });
-    if (existingSession) {
-      message.reply("You already have an ongoing study session.");
-      return;
-    }
-
-    const newSession = new StudySession({
-      userId: message.author.id,
-      studyStart: new Date(),
-    });
-    await newSession.save();
-    message.reply("Study session started!");
+    response = await studyService.startStudySession(message.author.id);
+    response +=
+      "\n" + (await studyService.getPersonalizedMessage(message.author.id));
   } else if (args[0] === "stop") {
-    const session = await StudySession.findOneAndUpdate(
-      { userId: message.author.id, studyEnd: null },
-      { studyEnd: new Date() },
-      { new: true }
-    );
-
-    if (!session) {
-      message.reply("You do not have an ongoing study session.");
-      return;
-    }
-
-    const duration = moment.duration(
-      moment(session.studyEnd).diff(moment(session.studyStart))
-    );
-    const formattedDuration = duration.format(
-      "h [hours], m [minutes], s [seconds]"
-    );
-    const messageType =
-      duration.asMinutes() > 60 ? "congratulations" : "encouragement";
-    const responseMessage = getRandomMessage(messageType);
-    message.reply(
-      `Study session stopped! Total time studied: ${formattedDuration}. ${responseMessage}`
-    );
+    response = await studyService.endStudySession(message.author.id);
   }
+
+  sendRandomizedResponse(message, response);
 };
 
 module.exports = {

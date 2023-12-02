@@ -51,6 +51,32 @@ class StudyService {
 
     return `Study session stopped! Total time studied: ${formattedDuration}. ${responseMessage}`;
   }
+
+  async getUserInteractionHistory(userId) {
+    try {
+      const sessions = await StudySession.find({ userId: userId });
+      console.log("sessions", sessions.length);
+      return {
+        isNewUser: sessions.length <= 1, // since we are first saving and giving another message -> indicator that studying has started.
+        frequentUser: sessions.length > 5,
+      };
+    } catch (error) {
+      console.error("Error fetching user history:", error);
+      return { isNewUser: true, frequentUser: false };
+    }
+  }
+
+  async getPersonalizedMessage(userId) {
+    const userHistory = await this.getUserInteractionHistory(userId);
+
+    if (userHistory.isNewUser) {
+      return "Welcome to your first study session! Let's get started!";
+    } else if (userHistory.frequentUser) {
+      return "Back again? Your dedication is impressive!";
+    } else {
+      return "";
+    }
+  }
 }
 
-module.exports = new StudyService();
+module.exports = StudyService;
