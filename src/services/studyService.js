@@ -55,7 +55,6 @@ class StudyService {
   async getUserInteractionHistory(userId) {
     try {
       const sessions = await StudySession.find({ userId: userId });
-      console.log("sessions", sessions.length);
       return {
         isNewUser: sessions.length <= 1, // since we are first saving and giving another message -> indicator that studying has started.
         frequentUser: sessions.length > 5,
