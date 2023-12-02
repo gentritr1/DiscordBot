@@ -21,5 +21,7 @@ const execute = async (message, args) => {
 
 module.exports = {
   name: "study",
+  description:
+    "Available Commands:\n!study start - Start a study session\n!study stop - Stop a study session",
   execute,
 };
