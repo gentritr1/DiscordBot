@@ -20,4 +20,4 @@ class DBService {
 
 const dbService = new DBService(process.env.MONGO_DB_URI);
 
-module.exports = dbService; // Export the initialized instance
+module.exports = dbService;
