@@ -2,7 +2,7 @@ const StudySession = require("../models/StudySession");
 const moment = require("moment");
 require("moment-duration-format");
 const getRandomMessage = require("../utils/getRandomMessage");
-const dbService = require("./dbService");
+const dbService = require("../config/databaseConfig"); // Import the database configuration
 
 class StudyService {
   async startStudySession(userId) {
