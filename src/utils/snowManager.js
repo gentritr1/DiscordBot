@@ -3,12 +3,22 @@ let awaitingResponse = false;
 let responseCheckInterval = null;
 
 const snowIntensities = {
-  light: { interval: 30000, flakes: 5 }, // 1 minute, 5 flakes
-  moderate: { interval: 15000, flakes: 10 }, // 30 seconds, 10 flakes
-  heavy: { interval: 2500, flakes: 20 }, // 10 seconds, 15 flakes
+  light: { interval: 40000, flakes: 5 }, // 40 seconds, 5 flakes
+  moderate: { interval: 15000, flakes: 10 }, // 15 seconds, 10 flakes
+  heavy: { interval: 2500, flakes: 20 }, // 2.5 seconds, 20 flakes
+};
+
+const snowThemes = {
+  classic: ["❄️", "☃️", "⛄", "🌨️"],
+  festive: ["🎄", "🎁", "🎅", "🤶", "❄️", "🕯️", "🔔"],
+  nature: ["🌲", "🌿", "🍂", "🌸", "❄️", "🌼", "🍁"],
+  galaxy: ["🌌", "🌠", "🌟", "💫", "🌛", "🪐", "🚀"],
+  ocean: ["🌊", "🐚", "🐟", "🐬", "🦀", "⚓", "🏖️"],
+  // Add more themes as desired
 };
 
 let currentIntensity = "moderate";
+let currentTheme = "classic";
 
 const updateSnowIntensity = (message, intensity) => {
   if (!snowIntensities[intensity]) {
@@ -53,7 +63,7 @@ const startSnow = (message) => {
     return;
   }
 
-  message.reply("Let it snow! ❄️");
+  message.reply(`Let it snow with intensity ${currentIntensity}! ❄️`);
   startSnowfall(message);
 };
 
@@ -73,12 +83,24 @@ const stopSnow = (message) => {
 
 const createSnowLine = () => {
   const { flakes } = snowIntensities[currentIntensity];
-  const snowflakes = ["❄️", "☃️", "⛄", "🌨️", "🎿", "⛷", "🏂"]; // More emojis for variety
+  const snowflakes = snowThemes[currentTheme];
   let snowLine = "";
   for (let i = 0; i < flakes; i++) {
     snowLine += snowflakes[Math.floor(Math.random() * snowflakes.length)] + " ";
   }
   return snowLine;
+};
+
+const updateSnowTheme = (message, theme) => {
+  if (!snowThemes[theme]) {
+    message.reply(
+      "Invalid theme. Available themes: " + Object.keys(snowThemes).join(", ")
+    );
+    return;
+  }
+
+  currentTheme = theme;
+  message.reply(`Snow theme updated to ${theme}.`);
 };
 
 const checkUserResponse = (message) => {
@@ -117,4 +139,5 @@ module.exports = {
   createSnowLine,
   checkUserResponse,
   updateSnowIntensity,
+  updateSnowTheme,
 };

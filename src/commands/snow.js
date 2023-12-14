@@ -2,6 +2,7 @@ const {
   startSnow,
   stopSnow,
   updateSnowIntensity,
+  updateSnowTheme,
 } = require("../utils/snowManager");
 
 const execute = (message, args) => {
@@ -19,9 +20,20 @@ const execute = (message, args) => {
     case "heavy":
       updateSnowIntensity(message, command);
       break;
+    case "theme":
+      const theme = args[1]?.toLowerCase();
+      if (theme) {
+        updateSnowTheme(message, theme);
+      } else {
+        message.reply(
+          "Please specify a theme. Available themes: " +
+            Object.keys(snowThemes).join(", ")
+        );
+      }
+      break;
     default:
       message.reply(
-        "Commands: '!snow start', '!snow stop', '!snow light', '!snow moderate', '!snow heavy'"
+        "Commands: start, stop, light, moderate, heavy, theme [themeName]'"
       );
       break;
   }
