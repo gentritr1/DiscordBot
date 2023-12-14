@@ -3,6 +3,9 @@ const {
   stopSnow,
   updateSnowIntensity,
   updateSnowTheme,
+  throwSnowball,
+  leaveSnowballFight,
+  joinSnowballFight,
 } = require("../utils/snowManager");
 
 const execute = (message, args) => {
@@ -20,6 +23,15 @@ const execute = (message, args) => {
     case "heavy":
       updateSnowIntensity(message, command);
       break;
+    case "join":
+      joinSnowballFight(message, message.author);
+      break;
+    case "leave":
+      leaveSnowballFight(message.author, message.channel);
+      break;
+    case "throw":
+      throwSnowball(message, message.author, args[1]);
+      break;
     case "theme":
       const theme = args[1]?.toLowerCase();
       if (theme) {
@@ -33,7 +45,7 @@ const execute = (message, args) => {
       break;
     default:
       message.reply(
-        "Commands: start, stop, light, moderate, heavy, theme [themeName]'"
+        "Commands: start, stop, light, moderate, heavy, theme [themeName], '"
       );
       break;
   }
