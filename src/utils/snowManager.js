@@ -138,10 +138,22 @@ const checkUserResponse = (message) => {
 
 let inactivityWarnings = new Map();
 let currentGameRoomId = null;
+let isSimulationActive = false;
+let actionQueue = [];
+const inactivityTimeout = 120000; // Inactivity timeout in milliseconds (e.g., 120000ms for 2 minutes)
 
 let currentRound = 0;
 const totalRounds = 3; // Total number of rounds before the boss appears
 const bossTarget = { name: "Snowzilla", difficulty: 5, points: 100 }; // Boss
+
+const totalSimulationRounds = 5; // Total rounds for the simulation
+
+const simulatedPlayers = [
+  { id: "simulatedPlayer1", username: "Ibish" },
+  { id: "simulatedPlayer2", username: "Shota" },
+  { id: "simulatedPlayer3", username: "Galica" },
+  // Add more simulated players as needed
+];
 
 const soloTargets = [
   { name: "Snowman", difficulty: 1, points: 10 },
@@ -150,7 +162,99 @@ const soloTargets = [
   { name: "Roaming Penguin", difficulty: 4, points: 40 },
 ];
 
+const startSimulation = async (message) => {
+  isSimulationActive = true;
+  await simulatePlayerJoin(message); // Await all joins
+
+  actionQueue = [...simulatedPlayers];
+  proceedWithNextAction(message);
+};
+
+const proceedWithNextAction = (message) => {
+  if (
+    !isSimulationActive ||
+    actionQueue.length === 0 ||
+    currentRound >= totalSimulationRounds
+  ) {
+    endSimulation(message);
+    return;
+  }
+
+  const currentPlayer = actionQueue.shift();
+  simulatePlayerAction(message, currentPlayer);
+  actionQueue.push(currentPlayer);
+
+  if (actionQueue[0].id === simulatedPlayers[0].id) {
+    // A round is completed when the first player in the queue is up again
+    currentRound++;
+    message.channel.send(`🔄 Round ${currentRound} completed.`);
+    displayLeaderboard(message.channel);
+  }
+
+  setTimeout(() => proceedWithNextAction(message), 5000);
+};
+
+const simulatePlayerJoin = async (message) => {
+  for (const player of simulatedPlayers) {
+    await joinSnowballFight(message, player);
+  }
+};
+
+const simulatePlayerAction = async (message, player) => {
+  const playerIndex = simulatedPlayers.findIndex((p) => p.id === player.id);
+  const targetIndex = (playerIndex + 1) % simulatedPlayers.length;
+  const targetUsername = simulatedPlayers[targetIndex].username;
+
+  const doesHit = Math.random() < 0.5;
+  if (doesHit) {
+    message.channel.send(
+      `💥 ${player.username} hits ${targetUsername} with a snowball!`
+    );
+    await SnowballService.updateGameStats(player.id, true); // Update stats for a hit
+  } else {
+    message.channel.send(
+      `❌ ${player.username} misses the throw at ${targetUsername}!`
+    );
+  }
+};
+
+const endSimulation = (message) => {
+  isSimulationActive = false;
+  actionQueue = [];
+  clearAllInactivityTimers();
+  displayLeaderboard(message.channel); // Display final leaderboard
+  message.channel.send("🏁 Simulation ended.");
+};
+
+const clearAllInactivityTimers = () => {
+  inactivityWarnings.forEach((timer, userId) => {
+    clearTimeout(timer);
+    inactivityWarnings.delete(userId);
+  });
+};
+
+const resetInactivityTimer = (userId, channel, username) => {
+  if (!isSimulationActive) {
+    return; // Don't set inactivity timers if simulation is not active
+  }
+
+  if (inactivityWarnings.has(userId)) {
+    clearTimeout(inactivityWarnings.get(userId));
+  }
+
+  inactivityWarnings.set(
+    userId,
+    setTimeout(() => {
+      warnInactivePlayer(userId, username, channel);
+    }, inactivityTimeout)
+  );
+};
+
 const warnInactivePlayer = (userId, username, channel) => {
+  if (!isSimulationActive) {
+    return; // Skip inactivity handling if simulation is not active
+  }
+
   if (inactivityWarnings.has(userId)) {
     channel.send(
       `${username}, you have been removed from the snowball fight due to inactivity.`
@@ -208,16 +312,6 @@ const throwSnowballSolo = async (message, thrower) => {
   if (currentRound >= totalRounds) {
     message.channel.send("Boss round is coming up next!");
   }
-};
-
-let playerScores = new Map();
-
-const updateScore = (userId, username, points) => {
-  if (!playerScores.has(userId)) {
-    playerScores.set(userId, { username, score: 0 });
-  }
-  let playerScore = playerScores.get(userId);
-  playerScore.score += points;
 };
 
 const joinSnowballFight = async (message, user) => {
@@ -278,6 +372,7 @@ const throwSnowballMultiplayer = async (message, thrower, targetUsername) => {
     await SnowballService.updateGameStats(thrower.id, false, null); // Update stats for a miss
   }
 
+  // Update and check the round
   await SnowballService.updateRound(currentGameRoomId, 1);
   const currentRound = await SnowballService.getGameRoomCurrentRound(
     currentGameRoomId
@@ -302,19 +397,28 @@ const concludeGame = async (channel) => {
     channel.send(
       `🏆 The winner is ${winner.username} with ${winner.hits} hits!`
     );
+  } else {
+    channel.send("No winner could be determined.");
   }
 
-  // Display final leaderboard
-  displayLeaderboard(channel, finalStats);
+  displayLeaderboard(channel);
   currentGameRoomId = null; // Reset for a new game
 };
 
-const displayLeaderboard = (channel, stats) => {
-  let leaderboard = "🏆 Snowball Fight Leaderboard 🏆\n";
-  stats.forEach((player, index) => {
-    leaderboard += `${index + 1}. ${player.username}: ${player.hits} hits\n`;
+const displayLeaderboard = async (channel) => {
+  const finalStats = await SnowballService.getAllParticipantsStats(
+    currentGameRoomId
+  );
+  finalStats.sort((a, b) => b.hits - a.hits); // Sort by hits, descending
+
+  let leaderboardMessage = "🏆 Snowball Fight Leaderboard 🏆\n";
+  finalStats.forEach((playerStats, index) => {
+    leaderboardMessage += `${index + 1}. ${playerStats.username}: ${
+      playerStats.hits
+    } hits\n`;
   });
-  channel.send(leaderboard);
+
+  channel.send(leaderboardMessage);
 };
 
 module.exports = {
@@ -328,4 +432,6 @@ module.exports = {
   throwSnowballSolo,
   leaveSnowballFight,
   joinSnowballFight,
+  endSimulation,
+  startSimulation,
 };
