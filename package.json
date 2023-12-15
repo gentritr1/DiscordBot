@@ -23,6 +23,7 @@
     "moment": "^2.29.4",
     "moment-duration-format": "^2.3.2",
     "mongoose": "^8.0.2",
-    "openai": "^4.20.1"
+    "openai": "^4.20.1",
+    "uuid": "^9.0.1"
   }
 }
