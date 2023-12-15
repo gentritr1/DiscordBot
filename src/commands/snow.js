@@ -3,12 +3,13 @@ const {
   stopSnow,
   updateSnowIntensity,
   updateSnowTheme,
-  throwSnowball,
   leaveSnowballFight,
   joinSnowballFight,
+  throwSnowballMultiplayer,
+  throwSnowballSolo,
 } = require("../utils/snowManager");
 
-const execute = (message, args) => {
+const execute = async (message, args) => {
   const command = args[0]?.toLowerCase();
 
   switch (command) {
@@ -30,7 +31,14 @@ const execute = (message, args) => {
       leaveSnowballFight(message.author, message.channel);
       break;
     case "throw":
-      throwSnowball(message, message.author, args[1]);
+      const targetUsername = args[1];
+      if (targetUsername) {
+        // Multiplayer mode: Player specified a target user
+        await throwSnowballMultiplayer(message, message.author, targetUsername);
+      } else {
+        // Solo mode: No target user specified
+        await throwSnowballSolo(message, message.author);
+      }
       break;
     case "theme":
       const theme = args[1]?.toLowerCase();
