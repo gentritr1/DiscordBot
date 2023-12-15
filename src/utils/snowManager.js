@@ -1,5 +1,5 @@
-const SnowballStats = require("../models/SnowballStats");
 const SnowballService = require("../services/SnowballService");
+const { v4: uuidv4 } = require("uuid"); // If using the 'uuid' library
 
 let snowInterval = null;
 let awaitingResponse = false;
@@ -136,14 +136,18 @@ const checkUserResponse = (message) => {
     });
 };
 
-let snowballFightParticipants = new Map();
 let inactivityWarnings = new Map();
+let currentGameRoomId = null;
+
+let currentRound = 0;
+const totalRounds = 3; // Total number of rounds before the boss appears
+const bossTarget = { name: "Snowzilla", difficulty: 5, points: 100 }; // Boss
 
 const soloTargets = [
-  "Snowman",
-  "Ice Sculpture",
-  "Frozen Tree",
-  "Roaming Penguin",
+  { name: "Snowman", difficulty: 1, points: 10 },
+  { name: "Ice Sculpture", difficulty: 2, points: 20 },
+  { name: "Frozen Tree", difficulty: 3, points: 30 },
+  { name: "Roaming Penguin", difficulty: 4, points: 40 },
 ];
 
 const warnInactivePlayer = (userId, username, channel) => {
@@ -151,7 +155,8 @@ const warnInactivePlayer = (userId, username, channel) => {
     channel.send(
       `${username}, you have been removed from the snowball fight due to inactivity.`
     );
-    leaveSnowballFight({ id: userId, username: username }, channel);
+    const userData = { id: userId, username };
+    leaveSnowballFight(userData, channel);
     inactivityWarnings.delete(userId);
   } else {
     channel.send(
@@ -166,103 +171,150 @@ const warnInactivePlayer = (userId, username, channel) => {
   }
 };
 
-const throwSnowballSolo = async (message, thrower) => {
-  console.log("Throwing solo?", thrower, message);
-  const target = soloTargets[Math.floor(Math.random() * soloTargets.length)];
-  const hit = Math.random() < 0.5; // Simple hit/miss logic for solo play
+const startNewSnowballFight = async (message) => {
+  currentGameRoomId = uuidv4(); // Generate a unique room ID
+  await SnowballService.createGameRoom(currentGameRoomId); // Create a new game room with the generated ID
+  message.channel.send("A new snowball fight has started!");
+};
 
-  if (hit) {
-    message.channel.send(`🎯 ${thrower.username} hit the ${target}!`);
-  } else {
-    message.channel.send(`❌ ${thrower.username} missed the ${target}!`);
+const throwSnowballSolo = async (message, thrower) => {
+  if (currentRound >= totalRounds) {
+    // Boss round logic
+    const hit = Math.random() < 0.5; // Simplified hit chance
+    if (hit) {
+      message.channel.send(
+        `🎯 ${thrower.username} defeated ${bossTarget.name} and earned ${bossTarget.points} points!`
+      );
+      currentRound = 0; // Reset rounds for next game
+    } else {
+      message.channel.send(`❌ ${thrower.username} missed ${bossTarget.name}!`);
+    }
+    return;
   }
 
-  // Reset inactivity timer since the player is active
-  clearTimeout(inactivityWarnings.get(thrower.id));
-  inactivityWarnings.delete(thrower.id);
+  const target = soloTargets[Math.floor(Math.random() * soloTargets.length)];
 
-  // Restart inactivity timer for next throw
-  inactivityWarnings.set(
-    thrower.id,
-    setTimeout(() => {
-      warnInactivePlayer(thrower.id, thrower.username, message.channel);
-    }, 120000)
-  ); // 120 seconds
+  const hit = Math.random() < 1 / target.difficulty; // Hit chance based on difficulty
+  if (hit) {
+    message.channel.send(
+      `🎯 ${thrower.username} hit the ${target.name} and earned ${target.points} points!`
+    );
+    // Update player's score here
+  } else {
+    message.channel.send(`❌ ${thrower.username} missed the ${target.name}!`);
+  }
+
+  currentRound++;
+  if (currentRound >= totalRounds) {
+    message.channel.send("Boss round is coming up next!");
+  }
+};
+
+let playerScores = new Map();
+
+const updateScore = (userId, username, points) => {
+  if (!playerScores.has(userId)) {
+    playerScores.set(userId, { username, score: 0 });
+  }
+  let playerScore = playerScores.get(userId);
+  playerScore.score += points;
 };
 
 const joinSnowballFight = async (message, user) => {
-  const isNewUser = await SnowballService.joinSnowballFight(
+  if (!currentGameRoomId) {
+    await startNewSnowballFight(message);
+  }
+
+  await SnowballService.addParticipantToRoom(
+    currentGameRoomId,
     user.id,
     user.username
   );
-  if (!isNewUser) {
-    message.reply(`${user.username} is already in the snowball fight!`);
-    return;
-  }
-  snowballFightParticipants.set(user.id, { username: user.username }); // Use user.id as key
+  inactivityWarnings.set(
+    user.id,
+    setTimeout(
+      () => warnInactivePlayer(user.id, user.username, message.channel),
+      120000
+    )
+  );
   message.channel.send(`${user.username} has joined the snowball fight! ❄️🌨️`);
 };
 
 const leaveSnowballFight = async (user, channel) => {
-  const leftSuccessfully = await SnowballService.leaveSnowballFight(user.id);
-  if (!leftSuccessfully) {
-    channel.send(`${user.username} is not in the snowball fight.`);
-    return;
-  }
-  snowballFightParticipants.delete(user.id);
+  const remainingParticipants = await SnowballService.removeParticipantFromRoom(
+    currentGameRoomId,
+    user.id
+  );
+  clearTimeout(inactivityWarnings.get(user.id));
+  inactivityWarnings.delete(user.id);
   channel.send(`${user.username} has left the snowball fight.`);
-  if (snowballFightParticipants.size < 2) {
-    snowballFightParticipants.clear();
+
+  if (remainingParticipants < 2) {
+    currentGameRoomId = null; // Reset the game room ID
     channel.send("Snowball fight has ended due to lack of participants.");
   }
 };
 
-const throwSnowball = async (message, thrower, targetUsername) => {
-  // Reset inactivity timer
-  clearTimeout(inactivityWarnings.get(thrower.id));
-  inactivityWarnings.delete(thrower.id);
-
-  if (!snowballFightParticipants.has(thrower.id)) {
-    // Check using thrower.id
-    message.reply("You must join the snowball fight first!");
-    return;
-  }
-
-  if (snowballFightParticipants.size <= 1) {
-    console.log("here since only 1 player", message, thrower);
-    await throwSnowballSolo(message, thrower); // Handle solo play
-    return;
-  }
-
-  let target = [...snowballFightParticipants.values()].find(
-    (u) => u.username === targetUsername
+const throwSnowballMultiplayer = async (message, thrower, targetUsername) => {
+  const target = await SnowballService.getParticipant(
+    currentGameRoomId,
+    targetUsername
   );
   if (!target) {
     message.reply(`Could not find ${targetUsername} in the snowball fight.`);
     return;
   }
 
-  const hit = Math.random() < 0.5; // Simple hit/miss logic
+  const hit = Math.random() < 0.5; // Simplified hit logic
   if (hit) {
-    target.hits++;
     message.channel.send(
       `💥 ${thrower.username} hit ${target.username} with a snowball!`
     );
-    await SnowballService.recordThrow(thrower.id, true);
+    await SnowballService.updateGameStats(thrower.id, true, null); // Update stats for a hit
   } else {
     message.channel.send(
       `❌ ${thrower.username} missed ${target.username} with a snowball!`
     );
-    await SnowballService.recordThrow(thrower.id, false);
+    await SnowballService.updateGameStats(thrower.id, false, null); // Update stats for a miss
   }
 
-  // Start inactivity timer
-  inactivityWarnings.set(
-    thrower.id,
-    setTimeout(() => {
-      warnInactivePlayer(thrower.id, thrower.username, message.channel);
-    }, 120000)
-  ); // 120 seconds
+  await SnowballService.updateRound(currentGameRoomId, 1);
+  const currentRound = await SnowballService.getGameRoomCurrentRound(
+    currentGameRoomId
+  );
+
+  if (currentRound >= totalRounds) {
+    // Conclude the game after the set number of rounds
+    await concludeGame(message.channel);
+  }
+
+  resetInactivityTimer(thrower.id, message.channel, thrower.username);
+};
+
+const concludeGame = async (channel) => {
+  const finalStats = await SnowballService.getAllParticipantsStats(
+    currentGameRoomId
+  );
+  finalStats.sort((a, b) => b.hits - a.hits); // Sort by hits, descending
+
+  let winner = finalStats.length > 0 ? finalStats[0] : null;
+  if (winner) {
+    channel.send(
+      `🏆 The winner is ${winner.username} with ${winner.hits} hits!`
+    );
+  }
+
+  // Display final leaderboard
+  displayLeaderboard(channel, finalStats);
+  currentGameRoomId = null; // Reset for a new game
+};
+
+const displayLeaderboard = (channel, stats) => {
+  let leaderboard = "🏆 Snowball Fight Leaderboard 🏆\n";
+  stats.forEach((player, index) => {
+    leaderboard += `${index + 1}. ${player.username}: ${player.hits} hits\n`;
+  });
+  channel.send(leaderboard);
 };
 
 module.exports = {
@@ -272,7 +324,8 @@ module.exports = {
   checkUserResponse,
   updateSnowIntensity,
   updateSnowTheme,
-  throwSnowball,
+  throwSnowballMultiplayer,
+  throwSnowballSolo,
   leaveSnowballFight,
   joinSnowballFight,
 };
