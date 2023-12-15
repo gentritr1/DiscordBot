@@ -7,6 +7,8 @@ const {
   joinSnowballFight,
   throwSnowballMultiplayer,
   throwSnowballSolo,
+  startSimulation,
+  endSimulation,
 } = require("../utils/snowManager");
 
 const execute = async (message, args) => {
@@ -39,6 +41,12 @@ const execute = async (message, args) => {
         // Solo mode: No target user specified
         await throwSnowballSolo(message, message.author);
       }
+      break;
+    case "simulate":
+      startSimulation(message); // Await the start of simulation
+      break;
+    case "endsimulate":
+      endSimulation(message);
       break;
     case "theme":
       const theme = args[1]?.toLowerCase();
