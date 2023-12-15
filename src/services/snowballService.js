@@ -51,34 +51,23 @@ class SnowballService {
     }
   }
 
-  async updateGameStats(userId, didHit, didWin) {
+  async updateGameStats(userId, didHit) {
     await dbService.connect();
 
     const stats = await SnowballStats.findOne({ userId });
     if (stats) {
       stats.throws += 1;
-      if (didHit) stats.hits += 1;
-      if (didWin !== null) {
-        if (didWin) {
-          stats.wins += 1;
-          stats.winStreak += 1;
-        } else {
-          stats.losses += 1;
-          stats.winStreak = 0; // Reset win streak on loss
-        }
+      if (didHit) {
+        stats.hits += 1; // Increment hits
       }
-      stats.accuracy = (stats.hits / stats.throws) * 100;
       await stats.save();
     } else {
-      // Create new stats if not exist
+      // Create new stats record if it doesn't exist
       const newStats = new SnowballStats({
         userId: userId,
-        wins: didWin ? 1 : 0,
-        losses: didWin === false ? 1 : 0,
         hits: didHit ? 1 : 0,
         throws: 1,
-        winStreak: didWin ? 1 : 0,
-        accuracy: didHit ? 100 : 0,
+        // ... other default values ...
       });
       await newStats.save();
     }
@@ -86,10 +75,22 @@ class SnowballService {
 
   async getAllParticipantsStats(roomId) {
     await dbService.connect();
-    const gameRoom = await GameRoom.findOne({ roomId }).populate(
-      "participantsStats"
-    );
-    return gameRoom ? gameRoom.participantsStats : [];
+    const gameRoom = await GameRoom.findOne({ roomId });
+    if (!gameRoom) {
+      return [];
+    }
+
+    const statsPromises = gameRoom.participants.map(async (participant) => {
+      const stats = await SnowballStats.findOne({ userId: participant.userId });
+      if (stats) {
+        return { username: participant.username, ...stats.toObject() };
+      } else {
+        // Return a default object for participants with no stats
+        return { username: participant.username, hits: 0 };
+      }
+    });
+
+    return await Promise.all(statsPromises);
   }
 
   async getGameRoomCurrentRound(roomId) {
@@ -117,6 +118,16 @@ class SnowballService {
       return gameRoom.participants.find((p) => p.username === username) || null;
     }
     return null;
+  }
+
+  async updateRound(roomId, roundIncrement) {
+    await dbService.connect();
+
+    const gameRoom = await GameRoom.findOne({ roomId });
+    if (gameRoom) {
+      gameRoom.currentRound += roundIncrement;
+      await gameRoom.save();
+    }
   }
 
   async removeParticipantFromRoom(roomId, userId) {
